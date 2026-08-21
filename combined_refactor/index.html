@@ -2117,6 +2117,9 @@
                             <input id="resultTextSeparatorCustom" type="text" value="-" placeholder="自定义分隔符" oninput="markTextSeparatorCustom('result')">
                         </div>
                     </div>
+                    <div class="modal-field full" id="resultIPv6BracketsField">
+                        <label class="inline-check"><input type="checkbox" id="resultIPv6Brackets" checked onchange="updateResultPreview()"> IPv6 地址添加方括号</label>
+                    </div>
                     <div class="modal-field full">
                         <label>输出顺序</label>
                         <div class="order-list" id="resultOrderList"></div>
@@ -2241,6 +2244,9 @@
                             </select>
                             <input id="copyTextSeparatorCustom" type="text" value="-" placeholder="自定义分隔符" oninput="markTextSeparatorCustom('copy')">
                         </div>
+                    </div>
+                    <div class="modal-field full" id="copyIPv6BracketsField">
+                        <label class="inline-check"><input type="checkbox" id="copyIPv6Brackets" checked onchange="updateCopyPreview()"> IPv6 地址添加方括号</label>
                     </div>
                     <div class="modal-field full">
                         <label>输出顺序</label>
@@ -4979,6 +4985,8 @@
             if (format === 'txt' && !resultFieldOrder.includes('ipport')) resultFieldOrder.unshift('ipport');
             const separatorField = document.getElementById('resultTextSeparatorField');
             if (separatorField) separatorField.style.display = format === 'txt' ? '' : 'none';
+            const bracketsField = document.getElementById('resultIPv6BracketsField');
+            if (bracketsField) bracketsField.style.display = format === 'txt' ? '' : 'none';
             const rows = getCurrentResultRows(resultModalMode);
             const available = RESULT_FIELDS.filter((f) => f.key === 'ipport' || rows.some((r) => String(r[f.key] ?? '').trim() !== '')).concat(resultCustomFields);
             document.querySelectorAll('.github-field').forEach((el) => el.style.display = '');
@@ -5396,7 +5404,7 @@
             const rows = getSelectedCopyRows();
             if (!rows.length) throw new Error('暂无可复制结果');
             const fields = copyFieldOrder.length ? copyFieldOrder : getDefaultResultFieldOrderFor(copyModalMode, 'txt');
-            return buildResultContent('txt', rows, fields, getTextSeparator('copy'));
+            return buildResultContent('txt', rows, fields, getTextSeparator('copy'), useIPv6BracketsFor('copy'));
         }
 
         function buildCopyPreview() {
@@ -5404,7 +5412,7 @@
             if (!rows.length) return '暂无预览';
             const fields = copyFieldOrder.length ? copyFieldOrder : getDefaultResultFieldOrderFor(copyModalMode, 'txt');
             const first = rows[0];
-            const ipport = first.ipport || `${first.ip || ''}:${first.port || ''}`;
+            const ipport = first.ip ? formatIPPort(first.ip, first.port, useIPv6BracketsFor('copy')) : (first.ipport || `${first.ip || ''}:${first.port || ''}`);
             const extras = fields.filter((key) => key !== 'ipport').map((key) => first[key]).filter((value) => String(value ?? '').trim() !== '');
             const separator = getTextSeparator('copy');
             return extras.length ? `${ipport}#${extras.join(separator)}` : ipport;
@@ -5500,7 +5508,7 @@
             const rows = getSelectedResultRows();
             if (!rows.length) throw new Error('暂无可操作结果');
             const fields = resultFieldOrder.length ? resultFieldOrder : getDefaultResultFieldOrder(format);
-            return buildResultContent(format, rows, fields, getTextSeparator('result'));
+            return buildResultContent(format, rows, fields, getTextSeparator('result'), useIPv6BracketsFor('result'));
         }
 
         function applyTextSeparatorPreset(prefix, value) {
@@ -5531,11 +5539,11 @@
             return raw;
         }
 
-        function buildResultContent(format, rows, fields, textSeparator = '-') {
+        function buildResultContent(format, rows, fields, textSeparator = '-', useBrackets = true) {
             if (!rows.length) throw new Error('暂无可操作结果');
             if (format === 'txt') {
                 return rows.map((r) => {
-                    const ipport = r.ipport || `${r.ip || ''}:${r.port || ''}`;
+                    const ipport = r.ip ? formatIPPort(r.ip, r.port, useBrackets) : (r.ipport || `${r.ip || ''}:${r.port || ''}`);
                     const extras = fields.filter((k) => k !== 'ipport').map((k) => r[k]).filter((v) => String(v ?? '').trim() !== '');
                     return extras.length ? `${ipport}#${extras.join(textSeparator)}` : ipport;
                 }).join('\n') + '\n';
@@ -5563,13 +5571,28 @@
             return text;
         }
 
+        function isIPv6Address(ip) {
+            return typeof ip === 'string' && ip.indexOf(':') !== -1;
+        }
+
+        function formatIPPort(ip, port, useBrackets) {
+            const safeIP = String(ip || '');
+            if (!isIPv6Address(safeIP)) return `${safeIP}:${port ?? ''}`;
+            return useBrackets ? `[${safeIP}]:${port ?? ''}` : `${safeIP}:${port ?? ''}`;
+        }
+
+        function useIPv6BracketsFor(prefix) {
+            const el = document.getElementById(`${prefix}IPv6Brackets`);
+            return el ? el.checked : true;
+        }
+
         function buildResultPreview(format) {
             const rows = getSelectedResultRows();
             if (!rows.length) return '暂无预览';
             const fields = resultFieldOrder.length ? resultFieldOrder : getDefaultResultFieldOrder(format);
             const first = rows[0];
             if (format === 'txt') {
-                const ipport = first.ipport || `${first.ip || ''}:${first.port || ''}`;
+                const ipport = first.ip ? formatIPPort(first.ip, first.port, useIPv6BracketsFor('result')) : (first.ipport || `${first.ip || ''}:${first.port || ''}`);
                 const extras = fields.filter((k) => k !== 'ipport').map((k) => first[k]).filter((v) => String(v ?? '').trim() !== '');
                 return extras.length ? `${ipport}#${extras.join(getTextSeparator('result'))}` : ipport;
             }
